@@ -45,7 +45,6 @@ else:
     buff_type = bytes
 
 
-
 # =======================================================================
 # The server class. Creating an instance starts a server on the specified
 # host and port

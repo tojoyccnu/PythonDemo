@@ -540,7 +540,7 @@ def wdlock(fname,runmode,timeout):
     print("about %u seconds passed and lockfile is still locked - giving up" % timeout)
     return -1
 
-def termhandle(signum, frame):
+def term_handler(signum, frame):
     if sys.version_info[0] < 3:
         posix.write(Server.signal_pipe[1], '0')
     else:
@@ -549,8 +549,8 @@ def termhandle(signum, frame):
 def set_signal_handlers():
     r, w = os.pipe()
     Server.signal_pipe = [r, w]
-    signal.signal(signal.SIGINT, termhandle)
-    signal.signal(signal.SIGTERM, termhandle)
+    signal.signal(signal.SIGINT, term_handler)
+    signal.signal(signal.SIGTERM, term_handler)
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 def signal_cleanup():

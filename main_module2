@@ -28,6 +28,10 @@ import socket
 import select
 import subprocess
 
+OS_WIN = sys.platform.startswith("win")    # Windows: 'win32'/'win64'[1,2](@ref)
+OS_LINUX = sys.platform.startswith("linux") # Linux: 'linux'/'linux2'[1,8](@ref)
+OS_MAC = sys.platform == "darwin"          # macOS: 'darwin'[1,9](@ref)
+
 # Http server based on recipes 511453,511454 from code.activestate.com by Pierre Quentel"""
 # Added support for indexes, access tests, proper handle of SystemExit exception, fixed couple of errors and vulnerbilities, getopt, lockfiles, daemonize etc. by Jakub Kruszona-Zawadzki
 
@@ -492,6 +496,9 @@ class ServiceBase(ClientHandler):
 
 
 def mylock(filename):
+    if OS_WIN:
+        return 0
+
     try:
         fd = posix.open(filename,posix.O_RDWR|posix.O_CREAT,438) # 438 = 0o666
     except IOError:
@@ -518,6 +525,9 @@ def mylock(filename):
     return 0
 
 def wdlock(fname,runmode,timeout):
+    if OS_WIN:
+        return 1
+
     killed = 0
     for i in range(timeout):
         l = mylock(fname)
@@ -567,8 +577,9 @@ def set_signal_handlers():
     Server.signal_pipe = [r, w]
 
     signal.signal(signal.SIGINT, term_handler)
-    signal.signal(signal.SIGTERM, term_handler)
-    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    if not OS_WIN:
+        signal.signal(signal.SIGTERM, term_handler)
+        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 def signal_cleanup():
     Server.signal_pipe[0].close()
@@ -632,7 +643,7 @@ if __name__=="__main__":
 
     confpath = os.path.realpath(confpath)
 
-    r_conn, w_conn = Pipe()
+    r_conn, w_conn = Pipe(False)
 
     if (mode==1 or mode==0) and daemonize:
 # daemonize
@@ -643,7 +654,6 @@ if __name__=="__main__":
             raise Exception("fork error: %s [%d]" % (e.strerror, e.errno))
         if pid>0:
             data = r_conn.recv()
-            #posix.read(pipefd[0],1)
             os._exit(0)
         try:
             os.chdir("/")
@@ -654,11 +664,9 @@ if __name__=="__main__":
             pid = os.fork()
         except OSError:
             if sys.version_info[0]<3:
-                #posix.write(pipefd[1],'0')
                 w_conn.send('0')
             else:
                 w_conn.send('0')
-                #posix.write(pipefd[1],bytes(1))
             e = sys.exc_info()[1]
             raise Exception("fork error: %s [%d]" % (e.strerror, e.errno))
         if pid>0:
@@ -678,16 +686,12 @@ if __name__=="__main__":
             os.dup2(0,2)
 
             if sys.version_info[0]<3:
-                #posix.write(pipefd[1],'0')
                 w_conn.send('0')
             else:
-                #posix.write(pipefd[1],bytes(1))
                 w_conn.send('0')
 
         r_conn.close()
         w_conn.close()
-        # posix.close(pipefd[0])
-        # posix.close(pipefd[1])
 
         server = Server(host, port)
 
@@ -715,9 +719,7 @@ if __name__=="__main__":
         print("process exited successfully (status:%d)" % ch)
     else:
         if sys.version_info[0]<3:
-            #posix.write(pipefd[1],'0')
             w_conn.send('0')
         else:
-            #posix.write(pipefd[1],bytes(1))
             w_conn.send('0')
         os._exit(0)

@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 
-import fcntl
 import errno
 import importlib
-import posix
 import time
 import signal
 import os
-import pwd
 import sys
 import getopt
 import traceback
@@ -204,18 +201,22 @@ def loop2(server,handler,timeout=30):
     return 0
 
 def on_signal_read(conn, mask):
-    data = conn.recv()
+    data = conn.recv(1)
     if data:
         Server.need_exit = True
 
-def loop(server,handler,timeout=30):
-    sel = selectors.DefaultSelector()
-    sel.register(server.signal_pipe[0], selectors.EVENT_READ, on_signal_read)
+def loop(server,handler,timeout=1):
+    sel = selectors.SelectSelector()
+    print("loop 111")
+    sel.register(Server.signal_pipe[0], selectors.EVENT_READ, on_signal_read)
     while not server.need_exit:
+        print("loop 222")
         events = sel.select(timeout)
         for key, mask in events:
-            callback = key.data
-            callback(key.fileobj, mask)
+            if key.fileobj == Server.signal_pipe[0]:
+                callback = key.data
+                callback(key.fileobj, mask)
+        print("loop 333")
     return 0
 
 # =============================================================
@@ -567,18 +568,21 @@ def wdlock(fname,runmode,timeout):
     return -1
 
 def term_handler(signum, frame):
+    print("777")
     if sys.version_info[0] < 3:
-        Server.signal_pipe[1].send('0')
+        Server.signal_pipe[1].send(b'\0')
     else:
-        Server.signal_pipe[1].send('0')
+        Server.signal_pipe[1].send(b'\0')
 
 def set_signal_handlers():
-    r, w = Pipe()
+    r, w = socket.socketpair()
     Server.signal_pipe = [r, w]
 
+    print("555")
     signal.signal(signal.SIGINT, term_handler)
+    signal.signal(signal.SIGTERM, term_handler)
+    print("6666")
     if not OS_WIN:
-        signal.signal(signal.SIGTERM, term_handler)
         signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 def signal_cleanup():
@@ -599,6 +603,9 @@ if __name__=="__main__":
     confpath='/tmp/server.conf'
     datapath='/tmp'
     module=None
+    
+    if OS_WIN:
+        daemonize = 0
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hC:D:M:t:fv")
@@ -701,8 +708,12 @@ if __name__=="__main__":
             ServiceBase.logging = False
 
         ServiceBase.confpath = confpath
+        
+        print("111")
+
 
         set_signal_handlers()
+        print("222")
 
         # Create instance of discoverer from this module and run actual discovery
         if module is not None :
@@ -713,7 +724,9 @@ if __name__=="__main__":
             res = d.get_instances(confpath)
             print(res)
 
+        print("333")
         ch = loop(server,ServiceBase)
+        print("444")
         print("exiting ...")
         signal_cleanup()
         print("process exited successfully (status:%d)" % ch)
